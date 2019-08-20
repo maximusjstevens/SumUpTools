@@ -6,7 +6,12 @@ Tools to work with the .nc-formatted SumUp database.
 
 This is a work in development. I created it to make working with the sumup database easy for my own needs. If there is a feature you want me to add, or you want to add yourself, let me know. 
 
-(8/20/19): Currently, there is only one file: sumup.py. I'll work on creating a jupyter notebook as a way to interact with the files.
+Currently, there are two files: sumup.py and SumUpTools.ipynb, which is a jupyter notebook. 
+
+## Workflow
+
+The workflow should be:
+
 
 This script processes the sumup netCDF-formatted database of firn cores and puts them into pandas dataframes, saved in pickles (.pkl files). If the script has already been run, then the .pkl files are just loaded into the workspace (you need to be working in ipython to do this).
 

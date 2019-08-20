@@ -46,11 +46,13 @@ def sumup(writer=False):
     try:
         dfg = pd.read_pickle('sumup_greenland.pkl')
         dfa = pd.read_pickle('sumup_antarctica.pkl')
-        print('pkl files for Anarctica and Greenland have been found; loading')
+        print('.pkl files for Anarctica and Greenland have been found; loading')
 
-    except Exception:
+    except Exception: 
+        print('.pkl files for Anarctica and Greenland have not been found, so they will be created.')
+        print('This takes a little while! What a great time to grab a coffee.')
         ### Load the data.
-        su = nc.Dataset('SUMup_datasets_july2018_density.nc','r+')
+        su = nc.Dataset('sumup_density_2019.nc','r+')
         lat=su['Latitude'][:]
         lon=su['Longitude'][:]
         date=su['Date'][:].astype(int).astype(str)
@@ -70,7 +72,7 @@ def sumup(writer=False):
         density=su['Density'][:]
         top=su['Start_Depth'][:]
         bot=su['Stop_Depth'][:]
-        mid=su['Midpoint_Depth'][:]
+        mid=su['Midpoint'][:]
         elev=su['Elevation'][:]
         error=su['Error'][:]
         cite=su['Citation'][:]
@@ -197,10 +199,10 @@ def sumup(writer=False):
 if __name__ == '__main__':
 
     if '-w' in sys.argv:
-        print('Writing to .csv')
+        print('Writing metadata to .csv')
         wtr = True
     else:
-        print('Not writing to .csv')
+        print('Not writing metadata to .csv')
         wtr = False
         
     dfa, dfg = sumup(wtr) #optional argument of True if you want to write csv files.
@@ -209,9 +211,9 @@ if __name__ == '__main__':
     ### dfa is for Antarctica, dfg is for Greenland.
     ### If you want to query the dataframes, use xs:
     ### Examples:
-    dfg.xs('1990-06-20',level='date')
-    core337 = dfg.xs(337,level='coreid') # this one is probably most useful You can find the core of interest in the google earth map and query it here. 
-    dfg.xs(15,level='cite') # this one is useful to see all the cores from a specific citation.
+    # dfg.xs('1990-06-20',level='date')
+    # core337 = dfg.xs(337,level='coreid') # this one is probably most useful You can find the core of interest in the google earth map and query it here. 
+    # dfg.xs(15,level='cite') # this one is useful to see all the cores from a specific citation.
 
 
     # core337.to_csv('c337.csv') # Save the core data to a csv file.
