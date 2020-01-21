@@ -81,15 +81,16 @@ def sumup(writer):
     lon[mk] = -60.0
     ##############
 
-    ### Find all of the unique cores (slow)
-    llpair=np.array((lat,lon)).T
-    xx=np.c_[lat,lon,cite,date]
-    core_unique = np.unique(xx,axis=0)
-    coreid = np.zeros(len(xx))
-
-    for ii,features in enumerate(core_unique):
-        inds = np.where((xx==features).all(axis=1))[0]
-        coreid[inds]=ii+1
+    ### Find all of the unique cores (not as slow as before)
+    phash = np.array([lat, lon, cite, date]).transpose().astype(str)
+    phash = np.array([hash(''.join(phash[n,:])) for n in range(len(phash))])
+    coreid = np.zeros_like(lat)
+    id_no = 1
+    
+    for h in set(phash):
+        inds = np.where(phash == h)
+        coreid[inds] = id_no
+        id_no += 1
     coreid = coreid.astype(int)
     ##############
 
