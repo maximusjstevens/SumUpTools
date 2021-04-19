@@ -9,9 +9,7 @@ import netCDF4 as nc
 import numpy as np
 from datetime import datetime
 import pandas as pd
-import matplotlib.pyplot as plt
 import sys
-
 
 '''
 This script processes the sumup netCDF-formatted database of firn cores and puts
@@ -39,19 +37,13 @@ e.g. deeper than some depth.
 
 def sumup(writer):
 
-    # try:
-    #     dfg = pd.read_pickle('sumup_greenland.pkl')
-    #     dfa = pd.read_pickle('sumup_antarctica.pkl')
-    #     print('.pkl files for Anarctica and Greenland have been found; loading')
-
-    # except Exception: 
     print('Creating dataframes with sumup data!')
     print('This takes a little while! What a great time to grab a coffee.')
     ### Load the data.
-    su = nc.Dataset('sumup_density_2019.nc','r+')
-    lat=su['Latitude'][:]
-    lon=su['Longitude'][:]
-    date=su['Date'][:].astype(int).astype(str)
+    su = nc.Dataset('sumup_density_2020.nc','r')
+    lat=su['Latitude'][:].data
+    lon=su['Longitude'][:].data
+    date=su['Date'][:].data.astype(int).astype(str)
     for kk,dd in enumerate(date):
         yr=dd[0:4]
         mo=dd[4:6]
@@ -60,18 +52,22 @@ def sumup(writer):
             mo='01'
         elif mo=='90':
             mo = '01'
+        elif int(mo)>12:
+            mo = '01'
+            dy = '01'
         if dy == '00':
             dy='01'
         elif dy == '32':
             dy='31'
         date[kk]=yr+mo+dy
-    density=su['Density'][:]
-    top=su['Start_Depth'][:]
-    bot=su['Stop_Depth'][:]
-    mid=su['Midpoint'][:]
-    elev=su['Elevation'][:]
-    error=su['Error'][:]
-    cite=su['Citation'][:]
+    density=su['Density'][:].data
+    top=su['Start_Depth'][:].data
+    bot=su['Stop_Depth'][:].data
+    mid=su['Midpoint'][:].data
+    elev=su['Elevation'][:].data
+    error=su['Error'][:].data
+    cite=su['Citation'][:].data
+    su.close()
     #############
 
     ### There is one entry that has no location, which is entered in sumup as -9999.
@@ -82,126 +78,59 @@ def sumup(writer):
     ##############
 
     ### Find all of the unique cores (not as slow as before)
-    phash = np.array([lat, lon, cite, date]).transpose().astype(str)
-    phash = np.array([hash(''.join(phash[n,:])) for n in range(len(phash))])
-    coreid = np.zeros_like(lat)
-    id_no = 1
-    
-    for h in set(phash):
-        inds = np.where(phash == h)
-        coreid[inds] = id_no
-        id_no += 1
-    coreid = coreid.astype(int)
-    ##############
+    ### and put into a dataframe
+    ### faster than previously b/c I now use pandas unique
+
+    d_all={}
+    d_all['lat'] = lat 
+    d_all['lon'] = lon       
+    lpa=list(zip(lat, lon))
+    d_all['latlon'] = lpa
+    d_all['date'] = date 
+    d_all['density'] = density 
+    d_all['top'] = top 
+    d_all['bot'] = bot 
+    d_all['mid'] = mid 
+    d_all['elev'] = elev 
+    d_all['error'] = error 
+    d_all['cite'] = cite.astype(int)
+
+    df_all = pd.DataFrame(d_all)
+    df_all.date = pd.to_datetime(df_all.date)
+    df_all.set_index(['lat','lon','date','cite'],inplace=True)
+    df_all['maxdepth'] = -9999.0
+    df_all['coreid'] = -9999
+    id_un = df_all.index.unique()
+    for kk,ID in enumerate(id_un):
+        df_all.loc[ID,'coreid'] = kk
+        df_all.loc[ID,'maxdepth'] = np.max((df_all.loc[ID].bot,df_all.loc[ID].mid))
+    df_all.set_index('coreid', append=True, inplace=True)
+    df_all = df_all.reorder_levels(['coreid', 'lat', 'lon','date','cite'])
 
     ##############
-    ### Antarctica
-    amask = lat < 0
-    unci_a = np.unique(cite[amask])
-    acores = coreid[amask]
-    uacores = np.unique(acores)
-    lpa=list(zip(lat[amask], lon[amask]))
+    ### Separate for Greenland and Antarctica
+    df_G = df_all.loc[df_all.index.get_level_values(1) > 0]
+    df_A = df_all.loc[df_all.index.get_level_values(1) < 0]
 
-    da={}
-    da['coreid'] = coreid[amask]
-    da['lat'] = lat[amask]
-    da['lon'] = lon[amask]      
-    da['latlon'] = lpa
-    da['date'] = date[amask]
-    da['density'] = density[amask]
-    da['top'] = top[amask]
-    da['bot'] = bot[amask]
-    da['mid'] = mid[amask]
-    da['elev'] = elev[amask]
-    da['error'] = error[amask]
-    da['cite'] = cite[amask].astype(int)
+    uAi = df_A.index.unique()
+    df_A_meta = pd.DataFrame({'depth':np.zeros(len(uAi))},index = uAi)
+    for core in df_A_meta.index.get_level_values('coreid'):
+        df_A_meta.loc[core,'depth'] = df_A.loc[core].maxdepth.values[0]
 
-    dfa = pd.DataFrame(da)
-    dfa.date = pd.to_datetime(dfa.date)
-    dfa.set_index(['coreid','lat','lon','date','cite'],inplace=True)
-    dfa.sort_index(inplace = True)
-    dfa['maxdepth'] = -9999.0
-    for core in dfa.index.get_level_values('coreid').unique():
-        maxdepth = np.max((dfa.loc[core].bot[-1],dfa.loc[core].mid[-1]))
-        dfa.loc[core,'maxdepth']=maxdepth
+    uGi = df_G.index.unique()
+    df_G_meta = pd.DataFrame({'depth':np.zeros(len(uGi))},index = uGi)
+    for core in df_G_meta.index.get_level_values('coreid'):
+        df_G_meta.loc[core,'depth'] = df_G.loc[core].maxdepth.values[0]
 
-    ### use the below code to create a csv with metadata, including lat lon 
-    ### pairs, that can be imported into google earth pro. The other data is
-    ### citation, date, coreid number, and maximum depth.
     if writer:
-        ucid_a = np.zeros(len(uacores))
-        uci_a = np.zeros(len(uacores))
-        ubot_a = np.zeros(len(uacores))
-        udate_a = np.zeros(len(uacores))
-        ull_a = np.zeros((len(uacores),2))
-        for jj in range(len(uacores)):
-            idx = np.where(acores == uacores[jj])[0][0]
-            idx2 = np.where(acores == uacores[jj])[0][-1]
-            ucid_a[jj] = da['coreid'][idx]
-            uci_a[jj] = da['cite'][idx]
-            ubot_a[jj] = np.max((da['bot'][idx2],da['mid'][idx2]))
-            udate_a[jj] = da['date'][idx]
-            ull_a[jj] = da['latlon'][idx]
-        a_out = np.c_[ull_a,uci_a,ucid_a,ubot_a,udate_a]
-        np.savetxt('sumup_antarctica.csv',a_out,delimiter=',',fmt='%1.4f, %1.4f, %i, %i, %1.3f, %s',header='Latitude,Longitude,Citation,coreid,bot_depth,date',comments='')
-
-    ##############
-    ### Greenland
-    gmask = lat>0
-    unci_g = np.unique(cite[gmask])
-    gcores = coreid[gmask]
-    ugcores = np.unique(gcores)
-    lpg=list(zip(lat[gmask], lon[gmask]))
-
-    dg={}
-    dg['coreid'] = coreid[gmask]
-    dg['lat'] = lat[gmask]
-    dg['lon'] = lon[gmask]
-    dg['latlon'] = lpg
-    dg['date'] = date[gmask]
-    dg['density'] = density[gmask]
-    dg['top'] = top[gmask]
-    dg['bot'] = bot[gmask]
-    dg['mid'] = mid[gmask]
-    dg['elev'] = elev[gmask]
-    dg['error'] = error[gmask]
-    dg['cite'] = cite[gmask].astype(int)
-
-    dfg = pd.DataFrame(dg)
-    dfg.date = pd.to_datetime(dfg.date)
-    dfg.set_index(['coreid','lat','lon','date','cite'],inplace=True)
-    dfg.sort_index(inplace = True)
-    dfg['maxdepth'] = -9999.0
-    for core in dfg.index.get_level_values('coreid').unique():
-        maxdepth = np.max((dfg.loc[core].bot[-1],dfg.loc[core].mid[-1]))
-        dfg.loc[core,'maxdepth']=maxdepth
-
-    ### use the below code to create a csv with metadata, including lat lon 
-    ### pairs, that can be imported into google earth pro. The other data is
-    ### citation, date, coreid number, and maximum depth.
-    if writer:
-        ucid_g = np.zeros(len(ugcores))
-        uci_g = np.zeros(len(ugcores))
-        ubot_g = np.zeros(len(ugcores))
-        udate_g = np.zeros(len(ugcores))
-        ull_g = np.zeros((len(ugcores),2))
-        for jj in range(len(ugcores)):
-            idx = np.where(gcores == ugcores[jj])[0][0]
-            idx2 = np.where(gcores == ugcores[jj])[0][-1]
-            ucid_g[jj] = dg['coreid'][idx]
-            uci_g[jj] = dg['cite'][idx]
-            ubot_g[jj] = np.max((dg['bot'][idx2],dg['mid'][idx2]))
-            udate_g[jj] = dg['date'][idx]
-            ull_g[jj] = dg['latlon'][idx]
-        g_out = np.c_[ull_g,uci_g,ucid_g,ubot_g,udate_g]
-        np.savetxt('sumup_greenland.csv',g_out,delimiter=',',fmt='%1.4f, %1.4f, %i, %i, %1.3f, %s',header='Latitude,Longitude,Citation,coreid,bot_depth,date',comments='')
+        df_A_meta.to_csv('sumup_antarctica_2020.csv')
+        df_G_meta.to_csv('sumup_greenland_2020.csv')
 
     ### pickle the dataframes for future loading:
-    dfa.to_pickle('sumup_antarctica.pkl')
-    dfg.to_pickle('sumup_greenland.pkl')
-
-    return dfa, dfg
-
+    df_A.to_pickle('sumup_antarctica_2020.pkl')
+    df_G.to_pickle('sumup_greenland_2020.pkl')
+    df_all.to_pickle('sumup_all_2020.pkl')
+    return df_A, df_G
 
 if __name__ == '__main__':
 
