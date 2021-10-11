@@ -43,6 +43,10 @@ def sumup(writer):
     su = nc.Dataset('sumup_density_2020.nc','r')
     lat=su['Latitude'][:].data
     lon=su['Longitude'][:].data
+    # The lat/lon are entered backwards in SumUp for the 180 citation.
+    i180 = np.where(su['Citation'][:].data==180)[0]
+    lat[i180] = su['Longitude'][i180].data
+    lon[i180] = su['Latitude'][i180].data
     date=su['Date'][:].data.astype(int).astype(str)
     for kk,dd in enumerate(date):
         yr=dd[0:4]
